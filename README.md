@@ -31,3 +31,7 @@ You may wish to use an additional plugin called [OSCSmooth](https://github.com/r
 
 - If you are using OSCSmooth, check the **"Uses OSC Smooth"** box before hitting generate.
 - You will have to run the OSCSmooth plugin **AFTER** running the initial generation from this tool.
+
+## Using the bones in SlimeVR Server
+- Many of the extended bones will require bones the main SlimeVR server project does not have yet. Use this project to add tracking support for those bones.
+https://github.com/Sebane1/SlimeVR-Extender
