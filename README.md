@@ -10,7 +10,7 @@ Adds extended rig support compatible with VRChat avatars and specific versions o
 2. Navigate to **Settings** -> **Packages** -> **Add Repository**.
 3. Enter the repository URL for this plugin: `https://raw.githubusercontent.com/Sebane1/VRCSlimeVRExtendedRigSupport/main/index.json`
 4. Once added, open your Avatar project in VCC.
-5. Find "SlimeVR Toe Rig Support" in the package list and click the **(+)** button to install it.
+5. Find "SlimeVR Extended Rig Support" in the package list and click the **(+)** button to install it.
 
 ## Setup Instructions
 
