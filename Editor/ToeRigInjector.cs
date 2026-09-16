@@ -24,10 +24,10 @@ public class ToeRigInjector : EditorWindow
     private readonly Transform[] rightFootBones = new Transform[5];
 
     private readonly float[] leftFootSplay =
-        new float[5] { 15f, -3f, -7f, -15f, -30f };
+        new float[5] { 90f, -15f, -30f, -60f, -90f };
 
     private readonly float[] rightFootSplay =
-        new float[5] { -15f, 3f, 7f, 15f, 30f };
+        new float[5] { -90f, 15f, 30f, 60f, 90f };
 
     private float curlMinX = 90f;
     private float curlMaxX = -90f;
