@@ -1,4 +1,4 @@
-Adds experimental toe rig support compatible with VRChat avatars and specific versions of the SlimeVR server.
+Adds extended rig support compatible with VRChat avatars and specific versions of the SlimeVR server.
 
 ## Installation
 
