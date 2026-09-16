@@ -109,6 +109,29 @@
           "url": "https://github.com/Sebane1/VRCSlimeVRToeRigSupport/releases/download/v1.0.5/package.zip"
         }
       }
+    },
+    "com.sebanestudios.slimevrextendedrigsupport": {
+      "versions": {
+        "1.0.6": {
+          "name": "com.sebanestudios.slimevrextendedrigsupport",
+          "version": "1.0.6",
+          "displayName": "SlimeVR Extended Rig Support",
+          "description": "Adds extended tracking rig support compatible with VRChat avatars and specific versions of SlimeVR server.",
+          "unity": "2019.4",
+          "author": {
+            "name": "sebanestudios"
+          },
+          "keywords": [
+            "vrc",
+            "slimevr",
+            "tracking",
+            "toes",
+            "bust",
+            "tail"
+          ],
+          "url": "https://github.com/Sebane1/VRCSlimeVRExtendedRigSupport/releases/download/v1.0.6/package.zip"
+        }
+      }
     }
   }
 }
