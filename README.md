@@ -2,13 +2,13 @@ Adds extended rig support compatible with VRChat avatars and specific versions o
 
 ## Installation
 
-[![Add to VCC](https://img.shields.io/badge/Add_to-VCC-blue?logo=vrchat&logoColor=white&style=for-the-badge)](https://sebane1.github.io/VRCSlimeVRToeRigSupport/index.html)
+[![Add to VCC](https://img.shields.io/badge/Add_to-VCC-blue?logo=vrchat&logoColor=white&style=for-the-badge)](https://sebane1.github.io/VRCSlimeVRExtendedRigSupport/index.html)
 
 *(If the button above does not work in your browser, follow the manual steps below)*
 
 1. Open the **VRChat Creator Companion**.
 2. Navigate to **Settings** -> **Packages** -> **Add Repository**.
-3. Enter the repository URL for this plugin: `https://raw.githubusercontent.com/Sebane1/VRCSlimeVRToeRigSupport/main/index.json`
+3. Enter the repository URL for this plugin: `https://raw.githubusercontent.com/Sebane1/VRCSlimeVRExtendedRigSupport/main/index.json`
 4. Once added, open your Avatar project in VCC.
 5. Find "SlimeVR Toe Rig Support" in the package list and click the **(+)** button to install it.
 
@@ -19,12 +19,10 @@ Adds extended rig support compatible with VRChat avatars and specific versions o
 3. **Assign Files:**
    - Find your avatar's **VRC Expression Parameters** and drag the file into the appropriate slot.
    - Find your avatar's **Animator Controller** and drag the file into its slot.
-4. **Adjust Values (Optional):** Tweak the numbered values in degrees as you desire, or keep them as is. 
-   - *Splay values control how much toes can go sideways per toe.*
-5. **Assign Toe Bones:** After the values are to your liking, find and assign the toe bones from your avatar's rig into the slots. 
-   - *Note:* Use as many toes as your rig supports (minimum 1 per foot, up to 5). If your avatar has fewer than 5 toes, simply leave the extra boxes empty (`None`). The tool will safely skip them. You may wish to assign your final toe to slot 5 for pinky toe splay.
-6. Click **Generate Toe Support**.
-7. Your avatar should now have toe tracking support with compatible versions of SlimeVR!
+5. **Assign Bones:** Assign bones Bones from your avatar's rig into the relevant slots. 
+   - *Note:* Use as many bones as your rig supports.
+6. Click the relevant generate button.
+7. Your avatar should now have extended tracking support with compatible versions of SlimeVR!
 
 ## Optional: OSCSmooth
 
