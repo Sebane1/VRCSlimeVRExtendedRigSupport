@@ -1,5 +1,5 @@
 {
-    "name": "Sebane.SlimeVRToeRigSupport.Editor",
+    "name": "Sebane.SlimeVRExtendedRigSupport.Editor",
     "references": [
         "VRC.SDK3A.Editor",
         "VRC.SDK3A",
