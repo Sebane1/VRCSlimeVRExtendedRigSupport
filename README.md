@@ -27,7 +27,7 @@ Adds toes, bust, and tail tracking.
 
 ## Optional: OSCSmooth
 
-You may wish to use an additional plugin called [OSCSmooth](https://github.com/regzo2/OSCmooth) to make sure the toes look smooth to other people over the network. 
+You may wish to use an additional plugin called [OSCSmooth](https://github.com/regzo2/OSCmooth) to make sure joints look smooth to other people over the network. 
 
 - If you are using OSCSmooth, check the **"Uses OSC Smooth"** box before hitting generate.
 - You will have to run the OSCSmooth plugin **AFTER** running the initial generation from this tool.
