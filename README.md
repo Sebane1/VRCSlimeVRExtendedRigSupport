@@ -1,4 +1,5 @@
-Adds extended rig support compatible with VRChat avatars and specific versions of the SlimeVR server.
+Adds extended tracking rig support compatible with VRChat avatars and specific versions of the SlimeVR server.
+Adds toes, bust, and tail tracking.
 
 ## Installation
 
