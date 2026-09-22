@@ -140,25 +140,25 @@ public class PosteriorRigInjector : EditorWindow
             EditorStyles.boldLabel
         );
 
-        leftBustBone =
+        leftPosteriorBone =
             (Transform)EditorGUILayout.ObjectField(
                 "Left Posterior",
-                leftBustBone,
+                leftPosteriorBone,
                 typeof(Transform),
                 true
             );
 
-        rightBustBone =
+        rightPosteriorBone =
             (Transform)EditorGUILayout.ObjectField(
                 "Right Posterior",
-                rightBustBone,
+                rightPosteriorBone,
                 typeof(Transform),
                 true
             );
 
         if (GUILayout.Button("Auto Fill Bones"))
         {
-            AutoFillBones();
+            AutoFillPosteriorBones();
         }
 
         EditorGUILayout.Space();
@@ -173,7 +173,7 @@ public class PosteriorRigInjector : EditorWindow
         GUI.enabled =
             targetController != null &&
             selectedExpParams != null &&
-            (leftBustBone != null || rightBustBone != null);
+            (leftPosteriorBone != null || rightPosteriorBone != null);
 
         if (GUILayout.Button("Generate Posterior Support"))
         {
@@ -207,7 +207,7 @@ public class PosteriorRigInjector : EditorWindow
             return;
         }
 
-        if (leftBustBone == null && rightBustBone == null)
+        if (leftPosteriorBone == null && rightPosteriorBone == null)
         {
             EditorUtility.DisplayDialog(
                 "Missing Posterior Bones",
@@ -219,7 +219,7 @@ public class PosteriorRigInjector : EditorWindow
 
         if (string.IsNullOrWhiteSpace(clipOutputFolder))
         {
-            clipOutputFolder = "Assets/Animations/BustTracking";
+            clipOutputFolder = "Assets/Animations/PosteriorTracking";
         }
 
         clipOutputFolder =
@@ -497,8 +497,8 @@ public class PosteriorRigInjector : EditorWindow
 
     private void GenerateSharedVertical()
     {
-        AddUnsyncedFloatParameter(BustVertical);
-        AddEncodedBoolParameters(BustVertical);
+        AddUnsyncedFloatParameter(PosteriorVertical);
+        AddEncodedBoolParameters(PosteriorVertical);
 
         RemoveExistingLayer("PosteriorVertical");
         RemoveExistingLayer("PosteriorVertical_4BitEncode");
@@ -517,20 +517,20 @@ public class PosteriorRigInjector : EditorWindow
 
         GenerateFourBitEncoderLayer(
             "PosteriorVertical_4BitEncode",
-            BustVertical,
+            PosteriorVertical,
             controllerPath
         );
 
         GenerateFourBitDecoderLayer(
             "PosteriorVertical_4BitDecode",
-            BustVertical,
+            PosteriorVertical,
             controllerPath
         );
 
         string resolvedVerticalParameter =
             useOSCSmoothPath
-                ? "OSCm/Proxy/" + BustVertical
-                : BustVertical;
+                ? "OSCm/Proxy/" + PosteriorVertical
+                : PosteriorVertical;
 
         EnsureAnimatorFloatParameter(resolvedVerticalParameter);
 
@@ -639,20 +639,20 @@ public class PosteriorRigInjector : EditorWindow
                 wrapMode = WrapMode.Loop
             };
 
-        if (leftBustBone != null)
+        if (leftPosteriorBone != null)
         {
             AddWorldRelativeVerticalCurves(
                 clip,
-                leftBustBone,
+                leftPosteriorBone,
                 verticalMeters
             );
         }
 
-        if (rightBustBone != null)
+        if (rightPosteriorBone != null)
         {
             AddWorldRelativeVerticalCurves(
                 clip,
-                rightBustBone,
+                rightPosteriorBone,
                 verticalMeters
             );
         }
