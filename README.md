@@ -15,7 +15,7 @@ Adds toes, bust, posterior and tail tracking.
 
 ## Setup Instructions
 
-1. Open the tool by going to **`Tools` -> `Toe Rig`, `Bust Rig`, 'Posterior Rig', `Tail Rig` -> `Add Tracking Compatibility`** in the top menu.
+1. Open the tool by going to **`Tools` -> `Toe Rig`, `Bust Rig`, `Posterior Rig`, `Tail Rig` -> `Add Tracking Compatibility`** in the top menu.
 2. Wait for the configuration window to appear.
 3. **Assign Files:**
    - Find your avatar's **VRC Expression Parameters** and drag the file into the appropriate slot.
