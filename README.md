@@ -20,7 +20,7 @@ Adds toes, bust, posterior and tail tracking.
 3. **Assign Files:**
    - Find your avatar's **VRC Expression Parameters** and drag the file into the appropriate slot.
    - Find your avatar's **Animator Controller** and drag the file into its slot.
-5. **Assign Bones:** Assign bones Bones from your avatar's rig into the relevant slots. 
+5. **Assign Bones:** Assign bones from your avatar's rig into the relevant slots. 
    - *Note:* Use as many bones as your rig supports.
 6. Click the relevant generate button.
 7. Your avatar should now have extended tracking support with compatible versions of SlimeVR!
