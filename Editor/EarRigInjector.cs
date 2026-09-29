@@ -497,7 +497,6 @@ public class EarRigInjector : EditorWindow
     private void GenerateSharedVertical()
     {
         AddUnsyncedFloatParameter(EarVertical);
-
         AddEncodedBoolParameters(EarVertical);
 
         RemoveExistingLayer("EarVertical");
@@ -559,40 +558,45 @@ public class EarRigInjector : EditorWindow
             controllerPath
         );
 
-        List<Transform> activeBones = new List<Transform>();
-        if (leftEarBone != null) activeBones.Add(leftEarBone);
-        if (rightEarBone != null) activeBones.Add(rightEarBone);
-
-        AnimationClip verticalDown =
-            CreateVerticalClip(
-                "EarVertical_Down",
-                activeBones,
+        AnimationClip verticalNegative =
+            CreateWorldRelativeVerticalClip(
+                "EarVertical_Negative",
                 -maxVertical
             );
 
         AnimationClip verticalNeutral =
-            CreateVerticalClip(
+            CreateWorldRelativeVerticalClip(
                 "EarVertical_Neutral",
-                activeBones,
                 0f
             );
 
-        AnimationClip verticalUp =
-            CreateVerticalClip(
-                "EarVertical_Up",
-                activeBones,
+        AnimationClip verticalPositive =
+            CreateWorldRelativeVerticalClip(
+                "EarVertical_Positive",
                 maxVertical
             );
 
-        verticalTree.AddChild(verticalDown, -1f);
-        verticalTree.AddChild(verticalNeutral, 0f);
-        verticalTree.AddChild(verticalUp, 1f);
+        verticalTree.AddChild(
+            verticalNegative,
+            -1f
+        );
 
-        EditorUtility.SetDirty(verticalTree);
+        verticalTree.AddChild(
+            verticalNeutral,
+            0f
+        );
 
-        AnimatorState state = stateMachine.AddState("Tracking");
+        verticalTree.AddChild(
+            verticalPositive,
+            1f
+        );
+
+        AnimatorState state =
+            stateMachine.AddState("Tracking");
+
         state.motion = verticalTree;
         state.writeDefaultValues = true;
+
         stateMachine.defaultState = state;
 
         var layer =
@@ -603,20 +607,533 @@ public class EarRigInjector : EditorWindow
                 stateMachine = stateMachine
             };
 
-        var layers = targetController.layers.ToList();
-        layers.Add(layer);
-        targetController.layers = layers.ToArray();
+        var layers =
+            targetController.layers.ToList();
 
+        layers.Add(layer);
+
+        targetController.layers =
+            layers.ToArray();
+
+        EditorUtility.SetDirty(verticalTree);
         EditorUtility.SetDirty(stateMachine);
         EditorUtility.SetDirty(state);
         EditorUtility.SetDirty(targetController);
+
+        Debug.Log(
+            "[EarRig] Shared EarVertical generated: local Float encoder, " +
+            "four synced bits, remote Float decoder, and one position-only motion layer."
+        );
+    }
+
+    private AnimationClip CreateWorldRelativeVerticalClip(
+        string name,
+        float verticalMeters)
+    {
+        var clip =
+            new AnimationClip
+            {
+                name = name,
+                frameRate = 60f,
+                wrapMode = WrapMode.Loop
+            };
+
+        if (leftEarBone != null)
+        {
+            AddWorldRelativeVerticalCurves(
+                clip,
+                leftEarBone,
+                verticalMeters
+            );
+        }
+
+        if (rightEarBone != null)
+        {
+            AddWorldRelativeVerticalCurves(
+                clip,
+                rightEarBone,
+                verticalMeters
+            );
+        }
+
+        string path =
+            clipOutputFolder +
+            "/" +
+            name +
+            ".anim";
+
+        return SaveOrOverwriteClip(
+            clip,
+            path
+        );
+    }
+
+    private void AddWorldRelativeVerticalCurves(
+        AnimationClip clip,
+        Transform bone,
+        float verticalMeters)
+    {
+        string bonePath =
+            GetBonePath(bone);
+
+        if (string.IsNullOrEmpty(bonePath))
+        {
+            Debug.LogWarning(
+                $"[EarRig] Could not determine an animation path for '{bone.name}'."
+            );
+            return;
+        }
+
+        Transform avatarRoot =
+            GetAvatarRoot(bone);
+
+        Vector3 avatarUp =
+            avatarRoot != null
+                ? avatarRoot.up.normalized
+                : Vector3.up;
+
+        Vector3 originalWorldPosition =
+            bone.position;
+
+        Vector3 originalLocalPosition =
+            bone.localPosition;
+
+        Vector3 resultLocalPosition;
+
+        try
+        {
+            bone.position =
+                originalWorldPosition +
+                avatarUp * verticalMeters;
+
+            resultLocalPosition =
+                bone.localPosition;
+        } finally
+        {
+            bone.position =
+                originalWorldPosition;
+        }
+
+        SetConstantCurve(
+            clip,
+            bonePath,
+            "m_LocalPosition.x",
+            resultLocalPosition.x
+        );
+
+        SetConstantCurve(
+            clip,
+            bonePath,
+            "m_LocalPosition.y",
+            resultLocalPosition.y
+        );
+
+        SetConstantCurve(
+            clip,
+            bonePath,
+            "m_LocalPosition.z",
+            resultLocalPosition.z
+        );
+
+        if (
+            Mathf.Approximately(verticalMeters, 0f) &&
+            (resultLocalPosition - originalLocalPosition).sqrMagnitude > 0.0000001f)
+        {
+            Debug.LogWarning(
+                $"[EarRig] Neutral vertical pose for '{bone.name}' did not match rest position."
+            );
+        }
+    }
+
+    private AnimationClip CreateWorldRelativeRotationClip(
+        string name,
+        Transform bone,
+        float pitchDegrees,
+        float yawDegrees)
+    {
+        var clip =
+            new AnimationClip
+            {
+                name = name,
+                frameRate = 60f,
+                wrapMode = WrapMode.Loop
+            };
+
+        string bonePath =
+            GetBonePath(bone);
+
+        if (string.IsNullOrEmpty(bonePath))
+        {
+            Debug.LogWarning(
+                $"[EarRig] Could not determine an animation path for '{bone.name}'."
+            );
+        }
+
+        Quaternion originalWorldRotation =
+            bone.rotation;
+
+        Vector3 originalLocalEuler =
+            bone.localEulerAngles;
+
+        Transform avatarRoot =
+            GetAvatarRoot(bone);
+
+        Vector3 avatarRight =
+            avatarRoot != null
+                ? avatarRoot.right.normalized
+                : Vector3.right;
+
+        Vector3 avatarUp =
+            avatarRoot != null
+                ? avatarRoot.up.normalized
+                : Vector3.up;
+
+        Vector3 resultLocalEuler;
+
+        try
+        {
+            bone.rotation = originalWorldRotation;
+
+            bone.Rotate(
+                avatarUp,
+                yawDegrees,
+                Space.World
+            );
+
+            bone.Rotate(
+                avatarRight,
+                pitchDegrees,
+                Space.World
+            );
+
+            resultLocalEuler =
+                GetContinuousEuler(
+                    originalLocalEuler,
+                    bone.localEulerAngles
+                );
+        } finally
+        {
+            bone.rotation = originalWorldRotation;
+        }
+
+        SetConstantCurve(
+            clip,
+            bonePath,
+            "localEulerAnglesRaw.x",
+            resultLocalEuler.x
+        );
+
+        SetConstantCurve(
+            clip,
+            bonePath,
+            "localEulerAnglesRaw.y",
+            resultLocalEuler.y
+        );
+
+        SetConstantCurve(
+            clip,
+            bonePath,
+            "localEulerAnglesRaw.z",
+            resultLocalEuler.z
+        );
+
+        string path =
+            clipOutputFolder +
+            "/" +
+            name +
+            ".anim";
+
+        return SaveOrOverwriteClip(
+            clip,
+            path
+        );
+    }
+
+    private static Vector3 GetContinuousEuler(
+        Vector3 reference,
+        Vector3 euler)
+    {
+        return new Vector3(
+            reference.x +
+                Mathf.DeltaAngle(
+                    reference.x,
+                    euler.x
+                ),
+
+            reference.y +
+                Mathf.DeltaAngle(
+                    reference.y,
+                    euler.y
+                ),
+
+            reference.z +
+                Mathf.DeltaAngle(
+                    reference.z,
+                    euler.z
+                )
+        );
+    }
+
+    private static string MakeYawLabel(
+        int index,
+        int totalSteps,
+        float normalizedYaw)
+    {
+        int middle =
+            (totalSteps - 1) / 2;
+
+        if (index == middle)
+        {
+            return "YawZero";
+        }
+
+        int distance =
+            Mathf.Abs(index - middle);
+
+        return normalizedYaw < 0f
+            ? "YawN" + distance.ToString("00")
+            : "YawP" + distance.ToString("00");
+    }
+
+    private static void SetConstantCurve(
+        AnimationClip clip,
+        string path,
+        string property,
+        float value)
+    {
+        clip.SetCurve(
+            path,
+            typeof(Transform),
+            property,
+            new AnimationCurve(
+                new Keyframe(0f, value),
+                new Keyframe(1f, value)
+            )
+        );
+    }
+
+    private void EnsureAnimatorBoolParameter(
+        string parameter)
+    {
+        AnimatorControllerParameter[] matches =
+            targetController.parameters
+                .Where(p => p.name == parameter)
+                .ToArray();
+
+        if (
+            matches.Length == 1 &&
+            matches[0].type == AnimatorControllerParameterType.Bool)
+        {
+            return;
+        }
+
+        if (matches.Length > 0)
+        {
+            Debug.LogWarning(
+                $"[EarRig] Rebuilding Animator parameter '{parameter}' as Bool. " +
+                $"Found {matches.Length} existing parameter(s)."
+            );
+
+            while (
+                targetController.parameters.Any(
+                    p => p.name == parameter
+                ))
+            {
+                AnimatorControllerParameter existing =
+                    targetController.parameters.First(
+                        p => p.name == parameter
+                    );
+
+                targetController.RemoveParameter(existing);
+            }
+        }
+
+        targetController.AddParameter(
+            parameter,
+            AnimatorControllerParameterType.Bool
+        );
+
+        EditorUtility.SetDirty(targetController);
+    }
+
+    private void EnsureAnimatorFloatParameter(
+        string parameter)
+    {
+        AnimatorControllerParameter existing =
+            targetController.parameters.FirstOrDefault(
+                p => p.name == parameter
+            );
+
+        if (existing == null)
+        {
+            targetController.AddParameter(
+                parameter,
+                AnimatorControllerParameterType.Float
+            );
+
+            EditorUtility.SetDirty(targetController);
+            return;
+        }
+
+        if (existing.type != AnimatorControllerParameterType.Float)
+        {
+            Debug.LogError(
+                $"[EarRig] Animator parameter '{parameter}' already exists " +
+                $"but is {existing.type}, not Float."
+            );
+        }
+    }
+
+    private void AddUnsyncedFloatParameter(
+        string parameter)
+    {
+        AnimatorControllerParameter existing =
+            targetController.parameters.FirstOrDefault(
+                p => p.name == parameter
+            );
+
+        if (existing == null)
+        {
+            targetController.AddParameter(
+                parameter,
+                AnimatorControllerParameterType.Float
+            );
+        } else if (
+              existing.type !=
+              AnimatorControllerParameterType.Float)
+        {
+            Debug.LogError(
+                $"[EarRig] Animator parameter '{parameter}' already exists " +
+                $"but is {existing.type}, not Float."
+            );
+            return;
+        }
+
+        VRCExpressionParameters.Parameter expressionParameter =
+            selectedExpParams.parameters?.FirstOrDefault(
+                p => p.name == parameter
+            );
+
+        if (expressionParameter == null)
+        {
+            VRCExpressionUtility.AddMissingParameter(
+                selectedExpParams,
+                parameter,
+                VRCExpressionParameters.ValueType.Float,
+                false,
+                0,
+                false
+            );
+
+            expressionParameter =
+                selectedExpParams.parameters?.FirstOrDefault(
+                    p => p.name == parameter
+                );
+
+            if (expressionParameter != null)
+            {
+                expressionParameter.valueType =
+                    VRCExpressionParameters.ValueType.Float;
+                expressionParameter.networkSynced = false;
+                expressionParameter.saved = false;
+                EditorUtility.SetDirty(selectedExpParams);
+            }
+        } else
+        {
+            expressionParameter.valueType =
+                VRCExpressionParameters.ValueType.Float;
+
+            expressionParameter.networkSynced = false;
+            expressionParameter.saved = false;
+
+            EditorUtility.SetDirty(selectedExpParams);
+        }
+    }
+
+    private void AddEncodedBoolParameters(
+        string logicalParameter)
+    {
+        for (int bit = 0; bit < 4; bit++)
+        {
+            string bitParameter =
+                GetBitParameterName(
+                    logicalParameter,
+                    bit
+                );
+
+            EnsureAnimatorBoolParameter(
+                bitParameter
+            );
+
+            var expressionParameters =
+                selectedExpParams.parameters?.ToList() ??
+                new List<VRCExpressionParameters.Parameter>();
+
+            int index =
+                expressionParameters.FindIndex(
+                    p => p.name == bitParameter
+                );
+
+            VRCExpressionParameters.Parameter parameter;
+
+            if (index >= 0)
+            {
+                parameter =
+                    expressionParameters[index];
+            } else
+            {
+                parameter =
+                    new VRCExpressionParameters.Parameter
+                    {
+                        name = bitParameter
+                    };
+
+                expressionParameters.Add(parameter);
+                index = expressionParameters.Count - 1;
+            }
+
+            parameter.valueType =
+                VRCExpressionParameters.ValueType.Bool;
+
+            parameter.networkSynced = true;
+            parameter.saved = false;
+            parameter.defaultValue = 0f;
+
+            expressionParameters[index] =
+                parameter;
+
+            selectedExpParams.parameters =
+                expressionParameters.ToArray();
+        }
+
+        EditorUtility.SetDirty(targetController);
+        EditorUtility.SetDirty(selectedExpParams);
+    }
+
+    private static string GetBitParameterName(
+        string logicalParameter,
+        int bit)
+    {
+        return logicalParameter + "_B" + bit;
     }
 
     private void GenerateFourBitEncoderLayer(
         string layerName,
-        string sourceFloatParam,
+        string rawSourceFloatParameter,
         string controllerPath)
     {
+        if (
+            rawSourceFloatParameter.StartsWith(
+                "OSCm/Proxy/",
+                System.StringComparison.Ordinal))
+        {
+            Debug.LogError(
+                $"[EarRig] Refusing to encode OSCmooth proxy '{rawSourceFloatParameter}'. " +
+                "The encoder must read the raw logical OSC Float."
+            );
+            return;
+        }
+
         var stateMachine =
             new AnimatorStateMachine
             {
@@ -628,134 +1145,111 @@ public class EarRigInjector : EditorWindow
             controllerPath
         );
 
-        AnimatorState defaultState =
-            stateMachine.AddState("Idle");
+        AnimatorState idleState =
+            stateMachine.AddState(
+                "Remote_Idle",
+                new Vector3(0f, 0f, 0f)
+            );
 
-        stateMachine.defaultState = defaultState;
+        idleState.writeDefaultValues = true;
+        stateMachine.defaultState = idleState;
 
-        for (int level = 0; level < EncodedLevels; level++)
+        for (
+            int quantizedIndex = 0;
+            quantizedIndex < EncodedLevels;
+            quantizedIndex++)
         {
-            AnimatorState stepState =
-                stateMachine.AddState("SetLevel_" + level);
+            int wireCode =
+                QuantizedIndexToWireCode(
+                    quantizedIndex
+                );
 
-            stepState.writeDefaultValues = true;
+            AnimatorState state =
+                stateMachine.AddState(
+                    $"Q{quantizedIndex:00}_Code{wireCode:X1}",
+                    new Vector3(
+                        280f * (quantizedIndex % 4),
+                        100f + 90f * (quantizedIndex / 4),
+                        0f
+                    )
+                );
+
+            state.writeDefaultValues = true;
 
             var driver =
-                stepState.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
+                state.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
 
-            driver.localOnly = true;
+            driver.localOnly = false;
+            driver.parameters =
+                new List<VRC_AvatarParameterDriver.Parameter>();
 
-            int gray =
-                LevelToGrayCode(level);
-
-            for (int b = 0; b < 4; b++)
+            for (int bit = 0; bit < 4; bit++)
             {
-                bool bitValue =
-                    ((gray >> b) & 1) != 0;
+                bool bitSet =
+                    (wireCode & (1 << bit)) != 0;
 
                 driver.parameters.Add(
                     new VRC_AvatarParameterDriver.Parameter
                     {
                         name =
-                            GetBitParamName(
-                                sourceFloatParam,
-                                b
+                            GetBitParameterName(
+                                rawSourceFloatParameter,
+                                bit
                             ),
-
-                        value =
-                            bitValue ? 1f : 0f
+                        type =
+                            VRC_AvatarParameterDriver.ChangeType.Set,
+                        value = bitSet ? 1f : 0f
                     }
                 );
             }
 
-            float threshold =
-                GetLevelThreshold(level);
+            EditorUtility.SetDirty(driver);
+            EditorUtility.SetDirty(state);
 
-            AnimatorStateTransition trans =
-                defaultState.AddTransition(stepState);
+            AnimatorStateTransition transition =
+                stateMachine.AddAnyStateTransition(
+                    state
+                );
 
-            trans.hasExitTime = false;
-            trans.exitTime = 0f;
-            trans.duration = 0f;
-            trans.canTransitionToSelf = false;
+            transition.hasExitTime = false;
+            transition.duration = 0f;
+            transition.canTransitionToSelf = false;
 
-            trans.AddCondition(
-                AnimatorConditionMode.If,
-                0f,
-                "IsLocal"
+            AddForcedBoolCondition(
+                transition,
+                "IsLocal",
+                true
             );
 
-            if (level == 0)
+            if (quantizedIndex > 0)
             {
-                trans.AddCondition(
-                    AnimatorConditionMode.Less,
-                    threshold,
-                    sourceFloatParam
-                );
-            }
-            else
-            {
-                float prevThreshold =
-                    GetLevelThreshold(level - 1);
+                float lowerBoundary =
+                    -1f +
+                    (quantizedIndex - 0.5f) /
+                    EncodedMiddle;
 
-                trans.AddCondition(
+                transition.AddCondition(
                     AnimatorConditionMode.Greater,
-                    prevThreshold,
-                    sourceFloatParam
-                );
-
-                if (level < EncodedLevels - 1)
-                {
-                    trans.AddCondition(
-                        AnimatorConditionMode.Less,
-                        threshold,
-                        sourceFloatParam
-                    );
-                }
-            }
-
-            AnimatorStateTransition returnTrans =
-                stepState.AddTransition(defaultState);
-
-            returnTrans.hasExitTime = false;
-            returnTrans.exitTime = 0f;
-            returnTrans.duration = 0f;
-            returnTrans.canTransitionToSelf = false;
-
-            returnTrans.AddCondition(
-                AnimatorConditionMode.IfNot,
-                0f,
-                "IsLocal"
-            );
-
-            if (level == 0)
-            {
-                returnTrans.AddCondition(
-                    AnimatorConditionMode.Greater,
-                    threshold,
-                    sourceFloatParam
+                    lowerBoundary,
+                    rawSourceFloatParameter
                 );
             }
-            else
-            {
-                float prevThreshold =
-                    GetLevelThreshold(level - 1);
 
-                returnTrans.AddCondition(
+            if (quantizedIndex < EncodedLevels - 1)
+            {
+                float upperBoundary =
+                    -1f +
+                    (quantizedIndex + 0.5f) /
+                    EncodedMiddle;
+
+                transition.AddCondition(
                     AnimatorConditionMode.Less,
-                    prevThreshold,
-                    sourceFloatParam
+                    upperBoundary,
+                    rawSourceFloatParameter
                 );
-
-                if (level < EncodedLevels - 1)
-                {
-                    returnTrans.AddCondition(
-                        AnimatorConditionMode.Greater,
-                        threshold,
-                        sourceFloatParam
-                    );
-                }
             }
+
+            EditorUtility.SetDirty(transition);
         }
 
         var layer =
@@ -770,17 +1264,45 @@ public class EarRigInjector : EditorWindow
             targetController.layers.ToList();
 
         layers.Add(layer);
-
         targetController.layers =
             layers.ToArray();
 
+        EditorUtility.SetDirty(idleState);
         EditorUtility.SetDirty(stateMachine);
         EditorUtility.SetDirty(targetController);
+
+        Debug.Log(
+            $"[EarRig] Generated ParameterDriver encoder '{layerName}' from raw Float " +
+            $"'{rawSourceFloatParameter}' into four synced Bool parameters."
+        );
+    }
+
+    private static void AddForcedBoolCondition(
+        AnimatorStateTransition transition,
+        string parameterName,
+        bool expectedValue)
+    {
+        AnimatorCondition[] retainedConditions =
+            transition.conditions
+                .Where(c => c.parameter != parameterName)
+                .ToArray();
+
+        transition.conditions = retainedConditions;
+
+        transition.AddCondition(
+            expectedValue
+                ? AnimatorConditionMode.If
+                : AnimatorConditionMode.IfNot,
+            0f,
+            parameterName
+        );
+
+        EditorUtility.SetDirty(transition);
     }
 
     private void GenerateFourBitDecoderLayer(
         string layerName,
-        string sourceFloatParam,
+        string decodedFloatParameter,
         string controllerPath)
     {
         var stateMachine =
@@ -794,98 +1316,101 @@ public class EarRigInjector : EditorWindow
             controllerPath
         );
 
-        AnimatorState defaultState =
-            stateMachine.AddState("Idle");
+        AnimatorState idleState =
+            stateMachine.AddState(
+                "Local_Idle",
+                new Vector3(0f, 0f, 0f)
+            );
 
-        stateMachine.defaultState = defaultState;
+        idleState.writeDefaultValues = true;
+        stateMachine.defaultState = idleState;
 
-        for (int level = 0; level < EncodedLevels; level++)
+        for (int wireCode = 0; wireCode < 16; wireCode++)
         {
-            AnimatorState stepState =
-                stateMachine.AddState("DecodeLevel_" + level);
+            int quantizedIndex =
+                WireCodeToQuantizedIndex(
+                    wireCode
+                );
 
-            stepState.writeDefaultValues = true;
+            bool valid =
+                quantizedIndex >= 0 &&
+                quantizedIndex < EncodedLevels;
+
+            float decodedValue =
+                valid
+                    ? (quantizedIndex - EncodedMiddle) /
+                        (float)EncodedMiddle
+                    : 0f;
+
+            string stateName =
+                valid
+                    ? $"Code_{wireCode:X1}_Step_{quantizedIndex:00}"
+                    : $"Code_{wireCode:X1}_FallbackNeutral";
+
+            AnimatorState state =
+                stateMachine.AddState(
+                    stateName,
+                    new Vector3(
+                        260f * (wireCode % 4),
+                        100f + 90f * (wireCode / 4),
+                        0f
+                    )
+                );
+
+            state.writeDefaultValues = true;
 
             var driver =
-                stepState.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
+                state.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
 
             driver.localOnly = false;
-
-            float decodedFloatValue =
-                LevelToDecodedFloat(level);
-
-            driver.parameters.Add(
-                new VRC_AvatarParameterDriver.Parameter
+            driver.parameters =
+                new List<VRC_AvatarParameterDriver.Parameter>
                 {
-                    name = sourceFloatParam,
-                    value = decodedFloatValue
-                }
+                    new VRC_AvatarParameterDriver.Parameter
+                    {
+                        name = decodedFloatParameter,
+                        type =
+                            VRC_AvatarParameterDriver.ChangeType.Set,
+                        value = decodedValue
+                    }
+                };
+
+            EditorUtility.SetDirty(driver);
+            EditorUtility.SetDirty(state);
+
+            AnimatorStateTransition transition =
+                stateMachine.AddAnyStateTransition(
+                    state
+                );
+
+            transition.hasExitTime = false;
+            transition.duration = 0f;
+            transition.canTransitionToSelf = false;
+
+            AddForcedBoolCondition(
+                transition,
+                "IsLocal",
+                false
             );
 
-            AnimatorStateTransition trans =
-                defaultState.AddTransition(stepState);
-
-            trans.hasExitTime = false;
-            trans.exitTime = 0f;
-            trans.duration = 0f;
-            trans.canTransitionToSelf = false;
-
-            trans.AddCondition(
-                AnimatorConditionMode.IfNot,
-                0f,
-                "IsLocal"
-            );
-
-            int gray =
-                LevelToGrayCode(level);
-
-            for (int b = 0; b < 4; b++)
+            for (int bit = 0; bit < 4; bit++)
             {
-                bool bitValue =
-                    ((gray >> b) & 1) != 0;
+                bool bitSet =
+                    (wireCode & (1 << bit)) != 0;
 
-                trans.AddCondition(
-                    bitValue
+                transition.AddCondition(
+                    bitSet
                         ? AnimatorConditionMode.If
                         : AnimatorConditionMode.IfNot,
                     0f,
-                    GetBitParamName(
-                        sourceFloatParam,
-                        b
+                    GetBitParameterName(
+                        decodedFloatParameter,
+                        bit
                     )
                 );
             }
 
-            AnimatorStateTransition returnTrans =
-                stepState.AddTransition(defaultState);
-
-            returnTrans.hasExitTime = false;
-            returnTrans.exitTime = 0f;
-            returnTrans.duration = 0f;
-            returnTrans.canTransitionToSelf = false;
-
-            returnTrans.AddCondition(
-                AnimatorConditionMode.If,
-                0f,
-                "IsLocal"
-            );
-
-            for (int b = 0; b < 4; b++)
-            {
-                bool bitValue =
-                    ((gray >> b) & 1) != 0;
-
-                returnTrans.AddCondition(
-                    bitValue
-                        ? AnimatorConditionMode.IfNot
-                        : AnimatorConditionMode.If,
-                    0f,
-                    GetBitParamName(
-                        sourceFloatParam,
-                        b
-                    )
-                );
-            }
+            EditorUtility.SetDirty(transition);
         }
 
         var layer =
@@ -900,425 +1425,195 @@ public class EarRigInjector : EditorWindow
             targetController.layers.ToList();
 
         layers.Add(layer);
-
         targetController.layers =
             layers.ToArray();
 
+        EditorUtility.SetDirty(idleState);
         EditorUtility.SetDirty(stateMachine);
         EditorUtility.SetDirty(targetController);
-    }
 
-    private static int LevelToGrayCode(int level)
-    {
-        int relative = level - EncodedMiddle;
-        int magnitude = Mathf.Abs(relative);
-        int grayMag = magnitude ^ (magnitude >> 1);
-        int signBit = relative < 0 ? 1 : 0;
-        return (grayMag << 1) | signBit;
-    }
-
-    private static float GetLevelThreshold(int level)
-    {
-        float stepSize = 2f / EncodedLevels;
-        return -1f + (level + 1) * stepSize;
-    }
-
-    private static float LevelToDecodedFloat(int level)
-    {
-        float stepSize = 2f / EncodedLevels;
-        return -1f + (level + 0.5f) * stepSize;
-    }
-
-    private static string GetBitParamName(string baseParam, int bitIndex)
-    {
-        return baseParam + "_Bit" + bitIndex;
-    }
-
-    private void AddEncodedBoolParameters(string baseParamName)
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            string bitName = GetBitParamName(baseParamName, i);
-            bool bitDefault = ((NeutralGrayCode >> i) & 1) != 0;
-
-            AddSyncedBoolParameter(bitName, bitDefault);
-            EnsureAnimatorBoolParameter(bitName);
-        }
-    }
-
-    private void AddUnsyncedFloatParameter(string paramName)
-    {
-        EnsureAnimatorFloatParameter(paramName);
-
-        if (selectedExpParams == null)
-        {
-            return;
-        }
-
-        List<VRCExpressionParameters.Parameter> list =
-            selectedExpParams.parameters != null
-                ? selectedExpParams.parameters.ToList()
-                : new List<VRCExpressionParameters.Parameter>();
-
-        if (list.Any(p => p != null && p.name == paramName))
-        {
-            return;
-        }
-
-        list.Add(
-            new VRCExpressionParameters.Parameter
-            {
-                name = paramName,
-                valueType = VRCExpressionParameters.ValueType.Float,
-                saved = false,
-                defaultValue = 0f,
-                networkSynced = false
-            }
-        );
-
-        selectedExpParams.parameters = list.ToArray();
-        EditorUtility.SetDirty(selectedExpParams);
-    }
-
-    private void AddSyncedBoolParameter(string paramName, bool defaultValue)
-    {
-        if (selectedExpParams == null)
-        {
-            return;
-        }
-
-        List<VRCExpressionParameters.Parameter> list =
-            selectedExpParams.parameters != null
-                ? selectedExpParams.parameters.ToList()
-                : new List<VRCExpressionParameters.Parameter>();
-
-        if (list.Any(p => p != null && p.name == paramName))
-        {
-            return;
-        }
-
-        list.Add(
-            new VRCExpressionParameters.Parameter
-            {
-                name = paramName,
-                valueType = VRCExpressionParameters.ValueType.Bool,
-                saved = false,
-                defaultValue = defaultValue ? 1f : 0f,
-                networkSynced = true
-            }
-        );
-
-        selectedExpParams.parameters = list.ToArray();
-        EditorUtility.SetDirty(selectedExpParams);
-    }
-
-    private void EnsureAnimatorFloatParameter(string paramName)
-    {
-        if (targetController == null)
-        {
-            return;
-        }
-
-        if (targetController.parameters.Any(p => p.name == paramName))
-        {
-            return;
-        }
-
-        targetController.AddParameter(
-            paramName,
-            AnimatorControllerParameterType.Float
+        Debug.Log(
+            $"[EarRig] Generated Bool-state ParameterDriver decoder '{layerName}' into raw Float " +
+            $"'{decodedFloatParameter}'."
         );
     }
 
-    private void EnsureAnimatorBoolParameter(string paramName)
+    private static int QuantizedIndexToWireCode(
+        int quantizedIndex)
     {
-        if (targetController == null)
-        {
-            return;
-        }
+        quantizedIndex =
+            Mathf.Clamp(
+                quantizedIndex,
+                0,
+                EncodedLevels - 1
+            );
 
-        if (targetController.parameters.Any(p => p.name == paramName))
-        {
-            return;
-        }
+        int gray =
+            quantizedIndex ^
+            (quantizedIndex >> 1);
 
-        targetController.AddParameter(
-            paramName,
-            AnimatorControllerParameterType.Bool
-        );
+        return gray ^ NeutralGrayCode;
     }
 
-    private void RemoveExistingLayer(string layerName)
+    private static int WireCodeToQuantizedIndex(
+        int wireCode)
     {
-        if (targetController == null)
+        int gray =
+            wireCode ^
+            NeutralGrayCode;
+
+        int binary = 0;
+
+        for (
+            int value = gray;
+            value != 0;
+            value >>= 1)
         {
-            return;
+            binary ^= value;
         }
 
-        List<AnimatorControllerLayer> layers =
+        return binary;
+    }
+
+    private void RemoveExistingLayer(
+        string layerName)
+    {
+        string controllerPath =
+            AssetDatabase.GetAssetPath(targetController);
+
+        var layers =
             targetController.layers.ToList();
 
         int index =
-            layers.FindIndex(l => l.name == layerName);
+            layers.FindIndex(
+                l => l.name == layerName
+            );
 
         if (index < 0)
         {
             return;
         }
 
-        AnimatorControllerLayer layer = layers[index];
-        if (layer.stateMachine != null)
-        {
-            DestroyStateMachineRecursive(layer.stateMachine);
-        }
+        AnimatorControllerLayer existing =
+            layers[index];
 
         layers.RemoveAt(index);
-        targetController.layers = layers.ToArray();
+
+        targetController.layers =
+            layers.ToArray();
+
+        if (existing.stateMachine != null)
+        {
+            DestroyStateMachineRecursive(
+                existing.stateMachine
+            );
+        }
+
         EditorUtility.SetDirty(targetController);
+
+        if (!string.IsNullOrEmpty(controllerPath))
+        {
+            AssetDatabase.ImportAsset(
+                controllerPath,
+                ImportAssetOptions.ForceUpdate
+            );
+        }
     }
 
-    private void DestroyStateMachineRecursive(AnimatorStateMachine sm)
+    private static void DestroyStateMachineRecursive(
+        AnimatorStateMachine stateMachine)
     {
-        if (sm == null)
+        if (stateMachine == null)
         {
             return;
         }
 
-        foreach (ChildAnimatorState state in sm.states)
+        foreach (
+            ChildAnimatorStateMachine childStateMachine
+            in stateMachine.stateMachines)
         {
-            if (state.state != null)
+            DestroyStateMachineRecursive(
+                childStateMachine.stateMachine
+            );
+        }
+
+        foreach (
+            ChildAnimatorState child
+            in stateMachine.states)
+        {
+            AnimatorState state =
+                child.state;
+
+            if (state == null)
             {
-                if (state.state.motion != null)
+                continue;
+            }
+
+            DestroyMotionRecursive(
+                state.motion
+            );
+
+            foreach (
+                AnimatorStateTransition transition
+                in state.transitions)
+            {
+                if (transition != null)
                 {
-                    DestroyMotionRecursive(state.state.motion);
+                    Object.DestroyImmediate(
+                        transition,
+                        true
+                    );
                 }
-
-                foreach (
-                    StateMachineBehaviour behaviour
-                    in state.state.behaviours)
-                {
-                    if (behaviour != null)
-                    {
-                        Object.DestroyImmediate(behaviour, true);
-                    }
-                }
-
-                Object.DestroyImmediate(state.state, true);
             }
-        }
 
-        foreach (ChildAnimatorStateMachine childSm in sm.stateMachines)
-        {
-            if (childSm.stateMachine != null)
-            {
-                DestroyStateMachineRecursive(childSm.stateMachine);
-            }
-        }
-
-        Object.DestroyImmediate(sm, true);
-    }
-
-    private AnimationClip CreateWorldRelativeRotationClip(
-        string clipName,
-        Transform bone,
-        float pitchDegrees,
-        float yawDegrees)
-    {
-        AnimationClip clip = new AnimationClip { name = clipName };
-        string relativePath = GetRelativePath(bone);
-
-        Quaternion relativeRot =
-            Quaternion.Euler(pitchDegrees, yawDegrees, 0f);
-
-        clip.SetCurve(
-            relativePath,
-            typeof(Transform),
-            "localRotation.x",
-            AnimationCurve.Constant(0f, 1f / 60f, relativeRot.x)
-        );
-
-        clip.SetCurve(
-            relativePath,
-            typeof(Transform),
-            "localRotation.y",
-            AnimationCurve.Constant(0f, 1f / 60f, relativeRot.y)
-        );
-
-        clip.SetCurve(
-            relativePath,
-            typeof(Transform),
-            "localRotation.z",
-            AnimationCurve.Constant(0f, 1f / 60f, relativeRot.z)
-        );
-
-        clip.SetCurve(
-            relativePath,
-            typeof(Transform),
-            "localRotation.w",
-            AnimationCurve.Constant(0f, 1f / 60f, relativeRot.w)
-        );
-
-        return SaveClipAsset(clip, clipName);
-    }
-
-    private AnimationClip CreateVerticalClip(
-        string clipName,
-        List<Transform> bones,
-        float yOffset)
-    {
-        AnimationClip clip = new AnimationClip { name = clipName };
-
-        foreach (Transform bone in bones)
-        {
-            if (bone == null) continue;
-
-            string relativePath = GetRelativePath(bone);
-            Vector3 localPos = bone.localPosition;
-            Vector3 targetPos = localPos + new Vector3(0f, yOffset, 0f);
-
-            clip.SetCurve(
-                relativePath,
-                typeof(Transform),
-                "localPosition.x",
-                AnimationCurve.Constant(0f, 1f / 60f, targetPos.x)
-            );
-
-            clip.SetCurve(
-                relativePath,
-                typeof(Transform),
-                "localPosition.y",
-                AnimationCurve.Constant(0f, 1f / 60f, targetPos.y)
-            );
-
-            clip.SetCurve(
-                relativePath,
-                typeof(Transform),
-                "localPosition.z",
-                AnimationCurve.Constant(0f, 1f / 60f, targetPos.z)
+            Object.DestroyImmediate(
+                state,
+                true
             );
         }
 
-        return SaveClipAsset(clip, clipName);
-    }
-
-    private static string MakeYawLabel(
-        int stepIndex,
-        int totalSteps,
-        float normalizedYaw)
-    {
-        int midIndex = totalSteps / 2;
-
-        if (stepIndex == midIndex)
-        {
-            return "YawCenter";
-        }
-
-        if (stepIndex < midIndex)
-        {
-            int index = midIndex - stepIndex;
-            return "YawNeg" + index;
-        }
-        else
-        {
-            int index = stepIndex - midIndex;
-            return "YawPos" + index;
-        }
-    }
-
-    private string GetRelativePath(Transform target)
-    {
-        if (target == null) return "";
-
-        Animator[] animators = FindObjectsOfType<Animator>();
-        Animator avatarAnimator =
-            animators.FirstOrDefault(a => a.isHuman) ?? animators[0];
-
-        Transform root = avatarAnimator != null ? avatarAnimator.transform : null;
-
-        if (root == null || target == root) return "";
-
-        List<string> pathParts = new List<string>();
-        Transform current = target;
-
-        while (current != null && current != root)
-        {
-            pathParts.Add(current.name);
-            current = current.parent;
-        }
-
-        pathParts.Reverse();
-        return string.Join("/", pathParts);
-    }
-
-    private AnimationClip SaveClipAsset(
-        AnimationClip clip,
-        string clipName)
-    {
-        EnsureFolder(clipOutputFolder);
-        string fullPath =
-            Path.Combine(clipOutputFolder, clipName + ".anim")
-                .Replace("\\", "/");
-
-        AnimationClip existing =
-            AssetDatabase.LoadAssetAtPath<AnimationClip>(fullPath);
-
-        if (existing != null)
-        {
-            EditorUtility.CopySerialized(clip, existing);
-            EditorUtility.SetDirty(existing);
-            Object.DestroyImmediate(clip);
-        }
-        else
-        {
-            AssetDatabase.CreateAsset(clip, fullPath);
-        }
-
-        AssetDatabase.ImportAsset(
-            fullPath,
-            ImportAssetOptions.ForceUpdate
+        Object.DestroyImmediate(
+            stateMachine,
+            true
         );
-
-        return existing != null
-            ? existing
-            : AssetDatabase.LoadAssetAtPath<AnimationClip>(fullPath);
     }
 
-    private void EnsureFolder(string folder)
+    private static void DestroyMotionRecursive(
+        Motion motion)
     {
-        folder = folder.Replace("\\", "/").TrimEnd('/');
+        BlendTree tree =
+            motion as BlendTree;
 
-        if (AssetDatabase.IsValidFolder(folder))
+        if (tree == null)
         {
             return;
         }
 
-        if (!folder.StartsWith("Assets"))
+        ChildMotion[] children =
+            tree.children;
+
+        foreach (
+            ChildMotion child
+            in children)
         {
-            Debug.LogError(
-                $"[EarRig] Folder must be inside Assets: {folder}"
-            );
-            return;
-        }
-
-        string[] parts = folder.Split('/');
-        string current = parts[0];
-
-        for (int i = 1; i < parts.Length; i++)
-        {
-            string next = current + "/" + parts[i];
-
-            if (!AssetDatabase.IsValidFolder(next))
+            if (child.motion is BlendTree)
             {
-                AssetDatabase.CreateFolder(current, parts[i]);
+                DestroyMotionRecursive(
+                    child.motion
+                );
             }
-
-            current = next;
         }
+
+        Object.DestroyImmediate(
+            tree,
+            true
+        );
     }
 
     private void AutoFillEarBones()
     {
-        Animator[] animators = FindObjectsOfType<Animator>();
+        Animator[] animators =
+            FindObjectsOfType<Animator>();
 
         if (animators.Length == 0)
         {
@@ -1331,14 +1626,22 @@ public class EarRigInjector : EditorWindow
         }
 
         Animator avatarAnimator =
-            animators.FirstOrDefault(a => a.isHuman) ?? animators[0];
+            animators.FirstOrDefault(
+                a => a.isHuman
+            ) ??
+            animators[0];
 
-        Transform avatarRoot = avatarAnimator.transform;
+        Transform avatarRoot =
+            avatarAnimator.transform;
 
         Transform[] transforms =
-            avatarRoot.GetComponentsInChildren<Transform>(true);
+            avatarRoot.GetComponentsInChildren<Transform>(
+                true
+            );
 
-        foreach (Transform t in transforms)
+        foreach (
+            Transform t
+            in transforms)
         {
             string normalized =
                 t.name
@@ -1348,7 +1651,8 @@ public class EarRigInjector : EditorWindow
                     .Replace("-", "")
                     .Replace(".", "");
 
-            bool earLike = normalized.Contains("ear");
+            bool earLike =
+                normalized.Contains("ear");
 
             if (!earLike)
             {
@@ -1365,15 +1669,18 @@ public class EarRigInjector : EditorWindow
                 normalized.EndsWith("r") ||
                 normalized.StartsWith("r");
 
-            if (left && leftEarBone == null)
+            if (
+                left &&
+                leftEarBone == null)
             {
                 leftEarBone = t;
 
                 Debug.Log(
                     $"[EarRig] Auto-mapped {t.name} -> Left Ear"
                 );
-            }
-            else if (right && rightEarBone == null)
+            } else if (
+                  right &&
+                  rightEarBone == null)
             {
                 rightEarBone = t;
 
@@ -1383,17 +1690,176 @@ public class EarRigInjector : EditorWindow
             }
         }
 
-        if (leftEarBone == null && rightEarBone == null)
+        Repaint();
+    }
+
+    private string GetBonePath(
+        Transform bone)
+    {
+        if (bone == null)
         {
-            EditorUtility.DisplayDialog(
-                "Auto Fill Results",
-                "No matching ear bones were automatically detected.",
-                "OK"
+            return "";
+        }
+        string path =
+            bone.name;
+
+        Transform parent =
+            bone.parent;
+
+        while (parent != null)
+        {
+            path =
+                parent.name +
+                "/" +
+                path;
+
+            if (
+                parent.name.StartsWith(
+                    "Armature"
+                ))
+            {
+                break;
+            }
+
+            parent =
+                parent.parent;
+        }
+
+        return path;
+    }
+
+    private Transform GetAvatarRoot(
+        Transform transform)
+    {
+        if (transform == null)
+        {
+            return null;
+        }
+
+        Transform current =
+            transform;
+
+        while (current != null)
+        {
+            Animator animator =
+                current.GetComponent<Animator>();
+
+            if (animator != null)
+            {
+                return current;
+            }
+
+            current =
+                current.parent;
+        }
+
+        return transform.root;
+    }
+
+    private AnimationClip SaveOrOverwriteClip(
+        AnimationClip clip,
+        string fullPath)
+    {
+        string directory =
+            Path.GetDirectoryName(fullPath)
+                ?.Replace("\\", "/");
+
+        if (string.IsNullOrEmpty(directory))
+        {
+            Debug.LogError(
+                $"[EarRig] Invalid animation path: {fullPath}"
             );
+            return null;
+        }
+
+        EnsureFolder(directory);
+
+        AnimationClip existing =
+            AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                fullPath
+            );
+
+        if (existing != null)
+        {
+            // Preserve the asset GUID so references stay stable when regenerating.
+            EditorUtility.CopySerialized(
+                clip,
+                existing
+            );
+
+            EditorUtility.SetDirty(existing);
+            Object.DestroyImmediate(clip);
+        } else
+        {
+            AssetDatabase.CreateAsset(
+                clip,
+                fullPath
+            );
+        }
+
+        AssetDatabase.ImportAsset(
+            fullPath,
+            ImportAssetOptions.ForceUpdate
+        );
+        return existing != null
+            ? existing
+            : AssetDatabase.LoadAssetAtPath<AnimationClip>(fullPath);
+    }
+
+    private void EnsureFolder(
+        string folder)
+    {
+        folder =
+            folder
+                .Replace("\\", "/")
+                .TrimEnd('/');
+
+        if (AssetDatabase.IsValidFolder(folder))
+        {
+            return;
+        }
+
+        if (!folder.StartsWith("Assets"))
+        {
+            Debug.LogError(
+                $"[EarRig] Folder must be inside Assets: {folder}"
+            );
+            return;
+        }
+
+        string[] parts =
+            folder.Split('/');
+
+        string current =
+            parts[0];
+
+        for (
+            int i = 1;
+            i < parts.Length;
+            i++)
+        {
+            string next =
+                current +
+                "/" +
+                parts[i];
+
+            if (!AssetDatabase.IsValidFolder(next))
+            {
+                AssetDatabase.CreateFolder(
+                    current,
+                    parts[i]
+                );
+            }
+
+            current =
+                next;
         }
     }
 
-    private static void SaveAssetPreference<T>(string key, T asset) where T : Object
+    private static void SaveAssetPreference<T>(
+        string key,
+        T asset)
+        where T : Object
     {
         if (asset == null)
         {
@@ -1401,7 +1867,8 @@ public class EarRigInjector : EditorWindow
             return;
         }
 
-        string path = AssetDatabase.GetAssetPath(asset);
+        string path =
+            AssetDatabase.GetAssetPath(asset);
 
         if (string.IsNullOrEmpty(path))
         {
@@ -1409,22 +1876,35 @@ public class EarRigInjector : EditorWindow
             return;
         }
 
-        EditorPrefs.SetString(key, path);
+        EditorPrefs.SetString(
+            key,
+            path
+        );
     }
 
-    private static T LoadAssetPreference<T>(string key) where T : Object
+    private static T LoadAssetPreference<T>(
+        string key)
+        where T : Object
     {
-        string path = EditorPrefs.GetString(key, "");
+        string path =
+            EditorPrefs.GetString(
+                key,
+                ""
+            );
 
         if (string.IsNullOrEmpty(path))
         {
             return null;
         }
 
-        return AssetDatabase.LoadAssetAtPath<T>(path);
+        return AssetDatabase.LoadAssetAtPath<T>(
+            path
+        );
     }
 
-    private static void SaveTransformPreference(string key, Transform transform)
+    private static void SaveTransformPreference(
+        string key,
+        Transform transform)
     {
         if (transform == null)
         {
@@ -1432,24 +1912,41 @@ public class EarRigInjector : EditorWindow
             return;
         }
 
-        GlobalObjectId id = GlobalObjectId.GetGlobalObjectIdSlow(transform);
-        EditorPrefs.SetString(key, id.ToString());
+        GlobalObjectId id =
+            GlobalObjectId.GetGlobalObjectIdSlow(
+                transform
+            );
+
+        EditorPrefs.SetString(
+            key,
+            id.ToString()
+        );
     }
 
-    private static Transform LoadTransformPreference(string key)
+    private static Transform LoadTransformPreference(
+        string key)
     {
-        string serializedId = EditorPrefs.GetString(key, "");
+        string serializedId =
+            EditorPrefs.GetString(
+                key,
+                ""
+            );
 
         if (string.IsNullOrEmpty(serializedId))
         {
             return null;
         }
 
-        if (!GlobalObjectId.TryParse(serializedId, out GlobalObjectId id))
+        if (!GlobalObjectId.TryParse(
+                serializedId,
+                out GlobalObjectId id))
         {
             return null;
         }
 
-        return GlobalObjectId.GlobalObjectIdentifierToObjectSlow(id) as Transform;
+        return
+            GlobalObjectId
+                .GlobalObjectIdentifierToObjectSlow(id)
+            as Transform;
     }
 }
