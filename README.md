@@ -1,6 +1,9 @@
 Adds extended tracking rig support compatible with VRChat avatars and specific versions of the SlimeVR server.
 Adds toes, bust, posterior and tail tracking.
 
+Video Demonstration And Tutorial:
+https://www.youtube.com/watch?v=ULscv5gH20g
+
 ## Installation
 
 [![Add to VCC](https://img.shields.io/badge/Add_to-VCC-blue?logo=vrchat&logoColor=white&style=for-the-badge)](https://sebane1.github.io/VRCSlimeVRExtendedRigSupport/index.html)
