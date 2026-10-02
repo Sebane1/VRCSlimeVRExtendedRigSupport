@@ -1077,6 +1077,28 @@ public class EarRigInjector : EditorWindow
         EditorUtility.SetDirty(targetController);
     }
 
+    private static void DestroyMotionRecursive(Motion motion)
+    {
+        BlendTree tree = motion as BlendTree;
+
+        if (tree == null)
+        {
+            return;
+        }
+
+        ChildMotion[] children = tree.children;
+
+        foreach (ChildMotion child in children)
+        {
+            if (child.motion is BlendTree)
+            {
+                DestroyMotionRecursive(child.motion);
+            }
+        }
+
+        Object.DestroyImmediate(tree, true);
+    }
+
     private void DestroyStateMachineRecursive(AnimatorStateMachine sm)
     {
         if (sm == null)
