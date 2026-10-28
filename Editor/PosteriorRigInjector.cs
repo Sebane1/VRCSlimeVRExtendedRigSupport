@@ -23,6 +23,7 @@ public class PosteriorRigInjector : EditorWindow
     private float maxVertical = 0.01f;
     private int yawSteps = 15;
     private bool useOSCSmoothPath;
+    private bool quantizeTracking = true;
 
     private Vector2 scroll;
 
@@ -48,6 +49,7 @@ public class PosteriorRigInjector : EditorWindow
     private void OnEnable()
     {
         useOSCSmoothPath = EditorPrefs.GetBool(PrefPrefix + "UseOSCSmooth", false);
+        quantizeTracking = EditorPrefs.GetBool(PrefPrefix + "QuantizeTracking", true);
 
         clipOutputFolder = EditorPrefs.GetString(
             PrefPrefix + "ClipOutputFolder",
@@ -69,6 +71,7 @@ public class PosteriorRigInjector : EditorWindow
     private void OnDisable()
     {
         EditorPrefs.SetBool(PrefPrefix + "UseOSCSmooth", useOSCSmoothPath);
+        EditorPrefs.SetBool(PrefPrefix + "QuantizeTracking", quantizeTracking);
         EditorPrefs.SetString(PrefPrefix + "ClipOutputFolder", clipOutputFolder);
 
         SaveAssetPreference(
@@ -132,6 +135,8 @@ public class PosteriorRigInjector : EditorWindow
                 "Uses OSC Smooth",
                 useOSCSmoothPath
             );
+
+        quantizeTracking = EditorGUILayout.Toggle("Quantize Tracking Values (4-bit)", quantizeTracking);
 
         EditorGUILayout.Space();
 
@@ -288,11 +293,13 @@ public class PosteriorRigInjector : EditorWindow
         string pitchParameter,
         string yawParameter)
     {
-        AddUnsyncedFloatParameter(pitchParameter);
-        AddUnsyncedFloatParameter(yawParameter);
-
-        AddEncodedBoolParameters(pitchParameter);
-        AddEncodedBoolParameters(yawParameter);
+        AddFloatParameter(pitchParameter, !quantizeTracking);
+        AddFloatParameter(yawParameter, !quantizeTracking);
+        if (quantizeTracking)
+        {
+            AddEncodedBoolParameters(pitchParameter);
+            AddEncodedBoolParameters(yawParameter);
+        }
 
         RemoveExistingLayer(sideName);
         RemoveExistingLayer(sideName + "_Pitch");
@@ -313,25 +320,25 @@ public class PosteriorRigInjector : EditorWindow
             return;
         }
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             sideName + "_Pitch4BitEncode",
             pitchParameter,
             controllerPath
         );
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             sideName + "_Yaw4BitEncode",
             yawParameter,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             sideName + "_Pitch4BitDecode",
             pitchParameter,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             sideName + "_Yaw4BitDecode",
             yawParameter,
             controllerPath
@@ -497,8 +504,8 @@ public class PosteriorRigInjector : EditorWindow
 
     private void GenerateSharedVertical()
     {
-        AddUnsyncedFloatParameter(PosteriorVertical);
-        AddEncodedBoolParameters(PosteriorVertical);
+        AddFloatParameter(PosteriorVertical, !quantizeTracking);
+        if (quantizeTracking) AddEncodedBoolParameters(PosteriorVertical);
 
         RemoveExistingLayer("PosteriorVertical");
         RemoveExistingLayer("PosteriorVertical_4BitEncode");
@@ -515,13 +522,13 @@ public class PosteriorRigInjector : EditorWindow
             return;
         }
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             "PosteriorVertical_4BitEncode",
             PosteriorVertical,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             "PosteriorVertical_4BitDecode",
             PosteriorVertical,
             controllerPath
@@ -986,8 +993,7 @@ public class PosteriorRigInjector : EditorWindow
         }
     }
 
-    private void AddUnsyncedFloatParameter(
-        string parameter)
+    private void AddFloatParameter(string parameter, bool synced)
     {
         AnimatorControllerParameter existing =
             targetController.parameters.FirstOrDefault(
@@ -1022,7 +1028,7 @@ public class PosteriorRigInjector : EditorWindow
                 selectedExpParams,
                 parameter,
                 VRCExpressionParameters.ValueType.Float,
-                false,
+                synced,
                 0,
                 false
             );
@@ -1036,7 +1042,7 @@ public class PosteriorRigInjector : EditorWindow
             {
                 expressionParameter.valueType =
                     VRCExpressionParameters.ValueType.Float;
-                expressionParameter.networkSynced = false;
+                expressionParameter.networkSynced = synced;
                 expressionParameter.saved = false;
                 EditorUtility.SetDirty(selectedExpParams);
             }
@@ -1045,9 +1051,17 @@ public class PosteriorRigInjector : EditorWindow
             expressionParameter.valueType =
                 VRCExpressionParameters.ValueType.Float;
 
-            expressionParameter.networkSynced = false;
+            expressionParameter.networkSynced = synced;
             expressionParameter.saved = false;
 
+            EditorUtility.SetDirty(selectedExpParams);
+        }
+
+        if (synced)
+        {
+            selectedExpParams.parameters = selectedExpParams.parameters
+                .Where(p => !Enumerable.Range(0, 4).Any(bit => p.name == GetBitParameterName(parameter, bit)))
+                .ToArray();
             EditorUtility.SetDirty(selectedExpParams);
         }
     }

@@ -34,6 +34,7 @@ public class ToeRigInjector : EditorWindow
 
     private bool useOSCSmoothPath;
     private bool invertValues;
+    private bool questMode;
 
     private const int SplaySteps = 15;
 
@@ -121,6 +122,11 @@ public class ToeRigInjector : EditorWindow
                 false
             );
 
+        questMode = EditorPrefs.GetBool(
+            "ToeRig_QuestMode_" + targetController.name,
+            false
+        );
+
         for (int i = 0; i < 5; i++)
         {
             leftFootSplay[i] =
@@ -180,6 +186,11 @@ public class ToeRigInjector : EditorWindow
             "ToeRig_InvertValuePath_" +
             targetController.name,
             invertValues
+        );
+
+        EditorPrefs.SetBool(
+            "ToeRig_QuestMode_" + targetController.name,
+            questMode
         );
 
         for (int i = 0; i < 5; i++)
@@ -265,6 +276,11 @@ public class ToeRigInjector : EditorWindow
                 "Invert Values",
                 invertValues
             );
+
+        questMode = EditorGUILayout.Toggle(
+            "Quest Mode",
+            questMode
+        );
 
         EditorGUILayout.Space();
 
@@ -718,17 +734,19 @@ public class ToeRigInjector : EditorWindow
                 )
             );
 
+        int splaySteps = questMode ? 1 : SplaySteps;
+
         for (
             int splayIndex = 0;
-            splayIndex < SplaySteps;
+            splayIndex < splaySteps;
             splayIndex++)
         {
-            float normalizedSplay =
-                Mathf.Lerp(
+            float normalizedSplay = splaySteps == 1
+                ? 0f
+                : Mathf.Lerp(
                     -1f,
                     1f,
-                    splayIndex /
-                    (float)(SplaySteps - 1)
+                    splayIndex / (float)(splaySteps - 1)
                 );
 
             float splayDegrees =

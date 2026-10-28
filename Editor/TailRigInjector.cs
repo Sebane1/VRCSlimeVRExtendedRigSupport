@@ -28,6 +28,7 @@ public class TailRigInjector : EditorWindow
     private float neutralPitchOffset = 0f;
 
     private bool useOSCSmoothPath;
+    private bool quantizeTracking = true;
 
     private Vector2 scroll;
 
@@ -52,6 +53,7 @@ public class TailRigInjector : EditorWindow
             PrefPrefix + "UseOSCSmooth",
             false
         );
+        quantizeTracking = EditorPrefs.GetBool(PrefPrefix + "QuantizeTracking", true);
 
         clipOutputFolder = EditorPrefs.GetString(
             PrefPrefix + "ClipOutputFolder",
@@ -95,6 +97,7 @@ public class TailRigInjector : EditorWindow
             PrefPrefix + "UseOSCSmooth",
             useOSCSmoothPath
         );
+        EditorPrefs.SetBool(PrefPrefix + "QuantizeTracking", quantizeTracking);
 
         EditorPrefs.SetString(
             PrefPrefix + "ClipOutputFolder",
@@ -172,6 +175,8 @@ public class TailRigInjector : EditorWindow
                 "Uses OSC Smooth",
                 useOSCSmoothPath
             );
+
+        quantizeTracking = EditorGUILayout.Toggle("Quantize Tracking Values (4-bit)", quantizeTracking);
 
         EditorGUILayout.Space();
 
@@ -363,21 +368,13 @@ public class TailRigInjector : EditorWindow
             "IsLocal"
         );
 
-        AddUnsyncedFloatParameter(
-            TailPitch
-        );
-
-        AddUnsyncedFloatParameter(
-            TailYaw
-        );
-
-        AddEncodedBoolParameters(
-            TailPitch
-        );
-
-        AddEncodedBoolParameters(
-            TailYaw
-        );
+        AddFloatParameter(TailPitch, !quantizeTracking);
+        AddFloatParameter(TailYaw, !quantizeTracking);
+        if (quantizeTracking)
+        {
+            AddEncodedBoolParameters(TailPitch);
+            AddEncodedBoolParameters(TailYaw);
+        }
 
         RemoveExistingLayer(
             "Tail"
@@ -404,28 +401,28 @@ public class TailRigInjector : EditorWindow
                 targetController
             );
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             "Tail_Pitch4BitEncode",
             TailPitch,
             controllerPath,
             pitchSensitivity
         );
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             "Tail_Yaw4BitEncode",
             TailYaw,
             controllerPath,
             yawSensitivity
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             "Tail_Pitch4BitDecode",
             TailPitch,
             controllerPath,
             pitchSensitivity
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             "Tail_Yaw4BitDecode",
             TailYaw,
             controllerPath,
@@ -1031,9 +1028,7 @@ public class TailRigInjector : EditorWindow
         }
     }
 
-    private void AddUnsyncedFloatParameter(
-        string parameter
-    )
+    private void AddFloatParameter(string parameter, bool synced)
     {
         if (
             !targetController.parameters.Any(
@@ -1051,10 +1046,26 @@ public class TailRigInjector : EditorWindow
             selectedExpParams,
             parameter,
             VRCExpressionParameters.ValueType.Float,
-            false,
+            synced,
             0,
             false
         );
+
+        var expressionParameters = selectedExpParams.parameters?.ToList()
+            ?? new List<VRCExpressionParameters.Parameter>();
+        int parameterIndex = expressionParameters.FindIndex(p => p.name == parameter);
+        if (parameterIndex >= 0)
+        {
+            expressionParameters[parameterIndex].valueType = VRCExpressionParameters.ValueType.Float;
+            expressionParameters[parameterIndex].networkSynced = synced;
+            expressionParameters[parameterIndex].saved = false;
+        }
+        if (synced)
+        {
+            expressionParameters.RemoveAll(p => Enumerable.Range(0, 4).Any(bit => p.name == $"{parameter}_B{bit}"));
+        }
+        selectedExpParams.parameters = expressionParameters.ToArray();
+        EditorUtility.SetDirty(selectedExpParams);
     }
 
     private void AddEncodedBoolParameters(

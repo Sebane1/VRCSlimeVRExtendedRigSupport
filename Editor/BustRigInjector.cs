@@ -23,6 +23,7 @@ public class BustRigInjector : EditorWindow
     private float maxVertical = 0.01f;
     private int yawSteps = 15;
     private bool useOSCSmoothPath;
+    private bool quantizeTracking = true;
 
     private Vector2 scroll;
 
@@ -48,6 +49,7 @@ public class BustRigInjector : EditorWindow
     private void OnEnable()
     {
         useOSCSmoothPath = EditorPrefs.GetBool(PrefPrefix + "UseOSCSmooth", false);
+        quantizeTracking = EditorPrefs.GetBool(PrefPrefix + "QuantizeTracking", true);
 
         clipOutputFolder = EditorPrefs.GetString(
             PrefPrefix + "ClipOutputFolder",
@@ -69,6 +71,7 @@ public class BustRigInjector : EditorWindow
     private void OnDisable()
     {
         EditorPrefs.SetBool(PrefPrefix + "UseOSCSmooth", useOSCSmoothPath);
+        EditorPrefs.SetBool(PrefPrefix + "QuantizeTracking", quantizeTracking);
         EditorPrefs.SetString(PrefPrefix + "ClipOutputFolder", clipOutputFolder);
 
         SaveAssetPreference(
@@ -132,6 +135,8 @@ public class BustRigInjector : EditorWindow
                 "Uses OSC Smooth",
                 useOSCSmoothPath
             );
+
+        quantizeTracking = EditorGUILayout.Toggle("Quantize Tracking Values (4-bit)", quantizeTracking);
 
         EditorGUILayout.Space();
 
@@ -288,11 +293,14 @@ public class BustRigInjector : EditorWindow
         string pitchParameter,
         string yawParameter)
     {
-        AddUnsyncedFloatParameter(pitchParameter);
-        AddUnsyncedFloatParameter(yawParameter);
+        AddFloatParameter(pitchParameter, !quantizeTracking);
+        AddFloatParameter(yawParameter, !quantizeTracking);
 
-        AddEncodedBoolParameters(pitchParameter);
-        AddEncodedBoolParameters(yawParameter);
+        if (quantizeTracking)
+        {
+            AddEncodedBoolParameters(pitchParameter);
+            AddEncodedBoolParameters(yawParameter);
+        }
 
         RemoveExistingLayer(sideName);
         RemoveExistingLayer(sideName + "_Pitch");
@@ -313,25 +321,25 @@ public class BustRigInjector : EditorWindow
             return;
         }
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             sideName + "_Pitch4BitEncode",
             pitchParameter,
             controllerPath
         );
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             sideName + "_Yaw4BitEncode",
             yawParameter,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             sideName + "_Pitch4BitDecode",
             pitchParameter,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             sideName + "_Yaw4BitDecode",
             yawParameter,
             controllerPath
@@ -497,8 +505,8 @@ public class BustRigInjector : EditorWindow
 
     private void GenerateSharedVertical()
     {
-        AddUnsyncedFloatParameter(BustVertical);
-        AddEncodedBoolParameters(BustVertical);
+        AddFloatParameter(BustVertical, !quantizeTracking);
+        if (quantizeTracking) AddEncodedBoolParameters(BustVertical);
 
         RemoveExistingLayer("BustVertical");
         RemoveExistingLayer("BustVertical_4BitEncode");
@@ -515,13 +523,13 @@ public class BustRigInjector : EditorWindow
             return;
         }
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             "BustVertical_4BitEncode",
             BustVertical,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             "BustVertical_4BitDecode",
             BustVertical,
             controllerPath
@@ -986,8 +994,7 @@ public class BustRigInjector : EditorWindow
         }
     }
 
-    private void AddUnsyncedFloatParameter(
-        string parameter)
+    private void AddFloatParameter(string parameter, bool synced)
     {
         AnimatorControllerParameter existing =
             targetController.parameters.FirstOrDefault(
@@ -1022,7 +1029,7 @@ public class BustRigInjector : EditorWindow
                 selectedExpParams,
                 parameter,
                 VRCExpressionParameters.ValueType.Float,
-                false,
+                synced,
                 0,
                 false
             );
@@ -1036,7 +1043,7 @@ public class BustRigInjector : EditorWindow
             {
                 expressionParameter.valueType =
                     VRCExpressionParameters.ValueType.Float;
-                expressionParameter.networkSynced = false;
+                expressionParameter.networkSynced = synced;
                 expressionParameter.saved = false;
                 EditorUtility.SetDirty(selectedExpParams);
             }
@@ -1045,9 +1052,17 @@ public class BustRigInjector : EditorWindow
             expressionParameter.valueType =
                 VRCExpressionParameters.ValueType.Float;
 
-            expressionParameter.networkSynced = false;
+            expressionParameter.networkSynced = synced;
             expressionParameter.saved = false;
 
+            EditorUtility.SetDirty(selectedExpParams);
+        }
+
+        if (synced)
+        {
+            selectedExpParams.parameters = selectedExpParams.parameters
+                .Where(p => !Enumerable.Range(0, 4).Any(bit => p.name == GetBitParameterName(parameter, bit)))
+                .ToArray();
             EditorUtility.SetDirty(selectedExpParams);
         }
     }
