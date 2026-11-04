@@ -23,6 +23,7 @@ public class EarRigInjector : EditorWindow
     private float maxVertical = 0.01f;
     private int yawSteps = 15;
     private bool useOSCSmoothPath;
+    private bool quantizeTracking = true;
 
     private Vector2 scroll;
 
@@ -47,6 +48,7 @@ public class EarRigInjector : EditorWindow
     private void OnEnable()
     {
         useOSCSmoothPath = EditorPrefs.GetBool(PrefPrefix + "UseOSCSmooth", false);
+        quantizeTracking = EditorPrefs.GetBool(PrefPrefix + "QuantizeTracking", true);
 
         clipOutputFolder = EditorPrefs.GetString(
             PrefPrefix + "ClipOutputFolder",
@@ -68,6 +70,7 @@ public class EarRigInjector : EditorWindow
     private void OnDisable()
     {
         EditorPrefs.SetBool(PrefPrefix + "UseOSCSmooth", useOSCSmoothPath);
+        EditorPrefs.SetBool(PrefPrefix + "QuantizeTracking", quantizeTracking);
         EditorPrefs.SetString(PrefPrefix + "ClipOutputFolder", clipOutputFolder);
 
         SaveAssetPreference(
@@ -131,6 +134,8 @@ public class EarRigInjector : EditorWindow
                 "Uses OSC Smooth",
                 useOSCSmoothPath
             );
+
+        quantizeTracking = EditorGUILayout.Toggle("Quantize Tracking Values (4-bit)", quantizeTracking);
 
         EditorGUILayout.Space();
 
@@ -287,11 +292,14 @@ public class EarRigInjector : EditorWindow
         string pitchParameter,
         string yawParameter)
     {
-        AddUnsyncedFloatParameter(pitchParameter);
-        AddUnsyncedFloatParameter(yawParameter);
+        AddUnsyncedFloatParameter(pitchParameter, !quantizeTracking);
+        AddUnsyncedFloatParameter(yawParameter, !quantizeTracking);
 
-        AddEncodedBoolParameters(pitchParameter);
-        AddEncodedBoolParameters(yawParameter);
+        if (quantizeTracking)
+        {
+            AddEncodedBoolParameters(pitchParameter);
+            AddEncodedBoolParameters(yawParameter);
+        }
 
         RemoveExistingLayer(sideName);
         RemoveExistingLayer(sideName + "_Pitch");
@@ -312,25 +320,25 @@ public class EarRigInjector : EditorWindow
             return;
         }
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             sideName + "_Pitch4BitEncode",
             pitchParameter,
             controllerPath
         );
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             sideName + "_Yaw4BitEncode",
             yawParameter,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             sideName + "_Pitch4BitDecode",
             pitchParameter,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             sideName + "_Yaw4BitDecode",
             yawParameter,
             controllerPath
@@ -496,8 +504,8 @@ public class EarRigInjector : EditorWindow
 
     private void GenerateSharedVertical()
     {
-        AddUnsyncedFloatParameter(EarVertical);
-        AddEncodedBoolParameters(EarVertical);
+        AddUnsyncedFloatParameter(EarVertical, !quantizeTracking);
+        if (quantizeTracking) AddEncodedBoolParameters(EarVertical);
 
         RemoveExistingLayer("EarVertical");
         RemoveExistingLayer("EarVertical_4BitEncode");
@@ -514,13 +522,13 @@ public class EarRigInjector : EditorWindow
             return;
         }
 
-        GenerateFourBitEncoderLayer(
+        if (quantizeTracking) GenerateFourBitEncoderLayer(
             "EarVertical_4BitEncode",
             EarVertical,
             controllerPath
         );
 
-        GenerateFourBitDecoderLayer(
+        if (quantizeTracking) GenerateFourBitDecoderLayer(
             "EarVertical_4BitDecode",
             EarVertical,
             controllerPath
@@ -985,7 +993,8 @@ public class EarRigInjector : EditorWindow
     }
 
     private void AddUnsyncedFloatParameter(
-        string parameter)
+        string parameter,
+        bool synced)
     {
         AnimatorControllerParameter existing =
             targetController.parameters.FirstOrDefault(
@@ -1020,7 +1029,7 @@ public class EarRigInjector : EditorWindow
                 selectedExpParams,
                 parameter,
                 VRCExpressionParameters.ValueType.Float,
-                false,
+                synced,
                 0,
                 false
             );
@@ -1034,7 +1043,7 @@ public class EarRigInjector : EditorWindow
             {
                 expressionParameter.valueType =
                     VRCExpressionParameters.ValueType.Float;
-                expressionParameter.networkSynced = false;
+                expressionParameter.networkSynced = synced;
                 expressionParameter.saved = false;
                 EditorUtility.SetDirty(selectedExpParams);
             }
@@ -1043,7 +1052,7 @@ public class EarRigInjector : EditorWindow
             expressionParameter.valueType =
                 VRCExpressionParameters.ValueType.Float;
 
-            expressionParameter.networkSynced = false;
+            expressionParameter.networkSynced = synced;
             expressionParameter.saved = false;
 
             EditorUtility.SetDirty(selectedExpParams);
